@@ -137,6 +137,26 @@ $ weight-inspect diff a.gguf b.gguf --format md
 | Modified tensors | 3 |
 ```
 
+### Compare with exit codes (CI)
+
+```bash
+# Exit code 0 if identical, 1 if different
+weight-inspect diff a.gguf b.gguf --fail-on-diff
+```
+
+### Show only changes
+
+```bash
+weight-inspect diff a.gguf b.gguf --only-changes
+```
+
+### Verbose output
+
+```bash
+weight-inspect inspect model.gguf --verbose
+weight-inspect diff a.gguf b.gguf --verbose
+```
+
 ### JSON output (for tooling)
 
 ```bash
