@@ -196,6 +196,22 @@ First 5 tensors:
   ...
 ```
 
+## Diff Behavior
+
+For ONNX files, `weight-inspect diff` compares:
+
+| Comparison | Description |
+|------------|-------------|
+| **Initializers/Weights** | Tensor names, shapes, dtypes, byte lengths |
+| **Metadata** | IR version, producer info, opset imports |
+
+**Not compared** (graph structure):
+- Node operations/types
+- Input/output names (only counts compared via metadata)
+- Model structure changes
+
+This is intentional - comparing graph structure is complex (what's a meaningful change? opcode differences? structural equivalence?). Weight comparison is sufficient for most use cases.
+
 ## References
 
 - [ONNX IR Specification](https://onnx.ai/onnx/docs/IR.html)
