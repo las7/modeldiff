@@ -1,12 +1,31 @@
 # modeldiff
 
-Deterministic structural diff engine for GGUF and safetensors ML model files.
+Deterministic structural identity for GGUF and safetensors ML model files.
+
+## The Problem
+
+Model files are opaque blobs. When you download or convert a model, you can't easily answer:
+
+- "What model family/architecture is this?"
+- "What quantization is used?"
+- "What are the tensor shapes?"
+- "Is this the same model as before?"
+
+## The Solution
+
+modeldiff provides **structural identity** - a canonical, deterministic representation of what a model file actually contains.
+
+### Core Value
+
+- **Understand** what any model file contains
+- **Compare** models structurally
+- **Reproduce** identical results across machines
 
 ## Features
 
-- **Parse** GGUF and safetensors files
-- **Hash** - Compute structural identity hash (SHA256 of canonical JSON)
-- **Diff** - Compare two model files structurally
+- **Inspect** - Understand any model file's structure
+- **Hash** - Compute deterministic structural identity (SHA256 of canonical JSON)
+- **Diff** - Compare two models structurally (built on identity)
 
 ## Installation
 
@@ -26,8 +45,14 @@ cargo build --release
 # Inspect a model file
 modeldiff inspect model.gguf
 
+# Inspect with JSON output
+modeldiff inspect model.gguf --json
+
 # Get structural identity
 modeldiff id model.gguf
+
+# ID with JSON output
+modeldiff id model.gguf --json
 
 # Diff two files
 modeldiff diff a.gguf b.gguf

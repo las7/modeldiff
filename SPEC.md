@@ -2,13 +2,13 @@
 
 ## Overview
 
-`modeldiff` is a deterministic structural diff engine for GGUF and safetensors model files.
+`modeldiff` provides deterministic structural identity for GGUF and safetensors model files.
 
 **Scope:**
 - Parse GGUF and safetensors headers/metadata
 - Extract tensor descriptors (name, dtype, shape, byte_length)
 - Compute structural hash
-- Diff two files structurally
+- Diff two files structurally (built on identity)
 
 **Out of Scope:**
 - Loading or hashing weight data

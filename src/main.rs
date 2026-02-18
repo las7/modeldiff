@@ -13,7 +13,7 @@ use modeldiff::types::Artifact;
 #[derive(Parser)]
 #[command(name = "modeldiff")]
 #[command(version = "0.1.0")]
-#[command(about = "Structural diff engine for GGUF and safetensors", long_about = None)]
+#[command(about = "Structural identity for GGUF and safetensors model files", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
