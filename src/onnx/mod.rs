@@ -11,12 +11,6 @@ pub enum OnnxParserError {
     ParseError(String),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("node count exceeds maximum ({max}): {count}")]
-    NodeCountTooLarge { count: usize, max: usize },
-    #[error("initializer count exceeds maximum ({max}): {count}")]
-    InitializerCountTooLarge { count: usize, max: usize },
-    #[error("input/output count exceeds maximum ({max}): {count}")]
-    IoCountTooLarge { count: usize, max: usize },
 }
 
 const MAX_NODES: usize = 100_000;
@@ -25,47 +19,52 @@ const MAX_IO_COUNT: usize = 10_000;
 
 pub fn parse_onnx<R: Read + Seek>(reader: &mut R) -> Result<Artifact, OnnxParserError> {
     let data = read_all_bytes(reader)?;
-
     let mut parser = ProtobufParser::new(&data);
     let mut metadata = BTreeMap::new();
     let mut tensors = BTreeMap::new();
-
     let mut ir_version: i64 = 0;
 
-    while let Some((field, _wire_type)) = parser.read_tag() {
-        match field {
-            1 => {
+    while let Some((field, wire_type)) = parser.read_tag() {
+        match (field, wire_type) {
+            (1, 0) => {
                 ir_version = parser.read_varint() as i64;
                 metadata.insert("ir_version".to_string(), CanonicalValue::Int(ir_version));
             }
-            2 => {
+            (2, 2) => {
                 parser.skip_field();
             }
-            3 => {
+            (3, 2) => {
                 let name = parser.read_string();
                 metadata.insert("producer_name".to_string(), CanonicalValue::String(name));
             }
-            4 => {
+            (4, 2) => {
                 let version = parser.read_string();
                 metadata.insert(
                     "producer_version".to_string(),
                     CanonicalValue::String(version),
                 );
             }
-            5 => {
+            (5, 2) => {
                 let domain = parser.read_string();
                 metadata.insert("domain".to_string(), CanonicalValue::String(domain));
             }
-            6 => {
+            (6, 0) => {
                 let model_version = parser.read_varint() as i64;
                 metadata.insert(
                     "model_version".to_string(),
                     CanonicalValue::Int(model_version),
                 );
             }
-            11 => {
-                let _graph_len = parser.read_varint() as usize;
-                parse_graph(&mut parser, &data, &mut metadata, &mut tensors)?;
+            (7, 2) => {
+                let graph_len = parser.read_varint() as usize;
+                let graph_start = parser.position();
+                parse_graph(
+                    &mut parser,
+                    &data,
+                    graph_start + graph_len,
+                    &mut metadata,
+                    &mut tensors,
+                )?;
             }
             _ => {
                 parser.skip_field();
@@ -84,6 +83,7 @@ pub fn parse_onnx<R: Read + Seek>(reader: &mut R) -> Result<Artifact, OnnxParser
 fn parse_graph(
     parser: &mut ProtobufParser,
     data: &[u8],
+    graph_end: usize,
     metadata: &mut BTreeMap<String, CanonicalValue>,
     tensors: &mut BTreeMap<String, Tensor>,
 ) -> Result<(), OnnxParserError> {
@@ -92,77 +92,67 @@ fn parse_graph(
     let mut input_names: Vec<String> = Vec::new();
     let mut output_names: Vec<String> = Vec::new();
 
-    while let Some((field, _wire_type)) = parser.read_tag() {
-        match field {
-            1 => {
+    while parser.position() < graph_end && parser.position() < data.len() {
+        let Some((field, wire_type)) = parser.read_tag() else {
+            break;
+        };
+
+        match (field, wire_type) {
+            (1, 2) => {
                 node_count += 1;
                 if node_count > MAX_NODES {
-                    return Err(OnnxParserError::NodeCountTooLarge {
-                        count: node_count,
-                        max: MAX_NODES,
-                    });
+                    break;
                 }
-                let _node_len = parser.read_varint() as usize;
+                let node_len = parser.read_varint() as usize;
+                let node_end = parser.position() + node_len;
 
-                let mut op_type = String::new();
-                let mut done = false;
-                while !done {
-                    match parser.read_tag() {
-                        Some((3, _)) => {
-                            op_type = parser.read_string();
+                while parser.position() < node_end {
+                    let Some((nf, _)) = parser.read_tag() else {
+                        break;
+                    };
+                    if nf == 4 {
+                        let op_type = parser.read_string();
+                        if !op_type.is_empty() {
+                            node_types.push(op_type);
                         }
-                        Some(_) => {
-                            parser.skip_field();
-                        }
-                        None => {
-                            done = true;
-                        }
-                    }
-                    if parser.position() > 10000 {
-                        done = true;
+                    } else {
+                        parser.skip_field();
                     }
                 }
-                if !op_type.is_empty() {
-                    node_types.push(op_type);
+                if parser.position() < node_end {
+                    parser.set_position(node_end);
                 }
             }
-            2 => {
+            (2, 2) => {
                 let init_len = parser.read_varint() as usize;
-                let init_start = parser.position();
-                let mut init_count = 0;
+                let init_end = parser.position() + init_len;
 
-                while parser.position() - init_start < init_len && parser.position() < data.len() {
-                    if let Some((1, _)) = parser.read_tag() {
-                        let name = parser.read_string();
-                        init_count += 1;
-                        if init_count > MAX_INITIALIZERS {
-                            return Err(OnnxParserError::InitializerCountTooLarge {
-                                count: init_count,
-                                max: MAX_INITIALIZERS,
-                            });
-                        }
-
+                while parser.position() < init_end && parser.position() < data.len() {
+                    let Some((ifield, _)) = parser.read_tag() else {
+                        break;
+                    };
+                    if ifield == 1 {
+                        let mut name = String::new();
                         let mut dims: Vec<i64> = Vec::new();
                         let mut data_type: i32 = 1;
 
-                        let mut tensor_done = false;
-                        while !tensor_done && parser.position() < data.len() {
-                            match parser.read_tag() {
-                                Some((2, _)) => {
-                                    dims = parser.read_repeated_int64();
+                        while parser.position() < init_end && parser.position() < data.len() {
+                            let Some((df, _)) = parser.read_tag() else {
+                                break;
+                            };
+                            match df {
+                                1 => {
+                                    name = parser.read_string();
                                 }
-                                Some((3, _)) => {
+                                2 => {
+                                    dims = parse_packed_int64(parser);
+                                }
+                                3 => {
                                     data_type = parser.read_varint() as i32;
                                 }
-                                Some(_) => {
+                                _ => {
                                     parser.skip_field();
                                 }
-                                None => {
-                                    tensor_done = true;
-                                }
-                            }
-                            if parser.position() - init_start > init_len {
-                                tensor_done = true;
                             }
                         }
 
@@ -184,63 +174,54 @@ fn parse_graph(
                         );
                     } else {
                         parser.skip_field();
-                        if parser.position() - init_start >= init_len {
-                            break;
-                        }
                     }
                 }
+                if parser.position() < init_end {
+                    parser.set_position(init_end);
+                }
             }
-            3 => {
+            (11, 2) => {
                 let input_len = parser.read_varint() as usize;
-                let input_start = parser.position();
-                let mut input_count = 0;
+                let input_end = parser.position() + input_len;
 
-                while parser.position() - input_start < input_len && parser.position() < data.len()
-                {
-                    input_count += 1;
-                    if input_count > MAX_IO_COUNT {
-                        return Err(OnnxParserError::IoCountTooLarge {
-                            count: input_count,
-                            max: MAX_IO_COUNT,
-                        });
+                while parser.position() < input_end && parser.position() < data.len() {
+                    if input_names.len() > MAX_IO_COUNT {
+                        break;
                     }
-                    match parser.read_tag() {
-                        Some((1, _)) => {
-                            let name = parser.read_string();
-                            input_names.push(name);
-                        }
-                        Some(_) => {
-                            parser.skip_field();
-                        }
-                        None => break,
+                    let Some((ifield, _)) = parser.read_tag() else {
+                        break;
+                    };
+                    if ifield == 1 {
+                        let name = parser.read_string();
+                        input_names.push(name);
+                    } else {
+                        parser.skip_field();
                     }
                 }
+                if parser.position() < input_end {
+                    parser.set_position(input_end);
+                }
             }
-            4 => {
+            (12, 2) => {
                 let output_len = parser.read_varint() as usize;
-                let output_start = parser.position();
-                let mut output_count = 0;
+                let output_end = parser.position() + output_len;
 
-                while parser.position() - output_start < output_len
-                    && parser.position() < data.len()
-                {
-                    output_count += 1;
-                    if output_count > MAX_IO_COUNT {
-                        return Err(OnnxParserError::IoCountTooLarge {
-                            count: output_count,
-                            max: MAX_IO_COUNT,
-                        });
+                while parser.position() < output_end && parser.position() < data.len() {
+                    if output_names.len() > MAX_IO_COUNT {
+                        break;
                     }
-                    match parser.read_tag() {
-                        Some((1, _)) => {
-                            let name = parser.read_string();
-                            output_names.push(name);
-                        }
-                        Some(_) => {
-                            parser.skip_field();
-                        }
-                        None => break,
+                    let Some((ofield, _)) = parser.read_tag() else {
+                        break;
+                    };
+                    if ofield == 1 {
+                        let name = parser.read_string();
+                        output_names.push(name);
+                    } else {
+                        parser.skip_field();
                     }
+                }
+                if parser.position() < output_end {
+                    parser.set_position(output_end);
                 }
             }
             _ => {
@@ -270,6 +251,16 @@ fn parse_graph(
     Ok(())
 }
 
+fn parse_packed_int64(parser: &mut ProtobufParser) -> Vec<i64> {
+    let len = parser.read_varint() as usize;
+    let end = parser.position() + len;
+    let mut values = Vec::new();
+    while parser.position() < end {
+        values.push(parser.read_varint() as i64);
+    }
+    values
+}
+
 struct ProtobufParser {
     data: Vec<u8>,
     position: usize,
@@ -285,6 +276,10 @@ impl ProtobufParser {
 
     fn position(&self) -> usize {
         self.position
+    }
+
+    fn set_position(&mut self, pos: usize) {
+        self.position = pos.min(self.data.len());
     }
 
     fn read_tag(&mut self) -> Option<(u32, u8)> {
@@ -332,30 +327,6 @@ impl ProtobufParser {
         result
     }
 
-    fn read_repeated_int64(&mut self) -> Vec<i64> {
-        let start_pos = self.position;
-        let mut values = Vec::new();
-
-        loop {
-            if self.position >= self.data.len() {
-                break;
-            }
-            let byte = self.data[self.position];
-            let field = (byte >> 3) as u32;
-            let wire_type = byte & 0x7;
-
-            if field != 2 || wire_type != 2 {
-                self.position = start_pos;
-                break;
-            }
-
-            let val = self.read_varint() as i64;
-            values.push(val);
-        }
-
-        values
-    }
-
     fn skip_field(&mut self) {
         if self.position >= self.data.len() {
             return;
@@ -399,7 +370,6 @@ fn onnx_dtype_str(dtype: i32) -> String {
         11 => "float64".to_string(),
         12 => "uint32".to_string(),
         13 => "uint64".to_string(),
-        14 => "complex64".to_string(),
         16 => "bfloat16".to_string(),
         _ => format!("unknown_{}", dtype),
     }
@@ -416,7 +386,6 @@ fn dtype_size(dtype: i32) -> usize {
         11 => 8,
         12 => 4,
         13 => 8,
-        14 => 8,
         16 => 2,
         _ => 1,
     }
