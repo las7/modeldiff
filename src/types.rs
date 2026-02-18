@@ -111,10 +111,10 @@ impl<'de> Deserialize<'de> for CanonicalValue {
             return Ok(CanonicalValue::Int(i));
         }
 
-        if let Some(bits) = s.strip_prefix("f32:") {
-            if let Ok(bits) = bits.parse::<u32>() {
-                return Ok(CanonicalValue::Float32(f32::from_bits(bits).into()));
-            }
+        if let Some(bits) = s.strip_prefix("f32:")
+            && let Ok(bits) = bits.parse::<u32>()
+        {
+            return Ok(CanonicalValue::Float32(f32::from_bits(bits).into()));
         }
 
         if let Ok(bits) = s.parse::<u64>() {
