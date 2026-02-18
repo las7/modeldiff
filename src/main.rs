@@ -47,6 +47,8 @@ pub enum AppError {
     },
     #[error("ONNX support not enabled: rebuild with --features onnx")]
     OnnxNotSupported { path: String },
+    #[error("invalid format '{format}': must be 'text' or 'md'")]
+    InvalidFormat { format: String },
     #[error("JSON error: {0}")]
     Json(serde_json::Error),
 }
@@ -255,6 +257,12 @@ fn main() -> Result<(), AppError> {
                 std::process::exit(1);
             }
 
+            if format != "text" && format != "md" {
+                return Err(AppError::InvalidFormat {
+                    format: format.clone(),
+                });
+            }
+
             print_diff_extended(&result, json, &format, only_changes, verbose)?;
         }
         Commands::Id { file, json } => {
@@ -288,7 +296,7 @@ fn main() -> Result<(), AppError> {
                     "ID:        wi:{}:{}:{}",
                     format!("{:?}", artifact.format).to_lowercase(),
                     artifact.gguf_version.unwrap_or(0),
-                    &hash[..8]
+                    &hash[..8.min(hash.len())]
                 );
                 println!("Stable:    yes (machine independent)");
                 println!("Includes:  header, tensor names, shapes, dtypes");

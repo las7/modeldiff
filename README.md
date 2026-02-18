@@ -1,6 +1,6 @@
 # weight-inspect
 
-Inspect GGUF and safetensors model files to see what's inside.
+Inspect GGUF, safetensors, and ONNX model files to see what's inside.
 
 Despite the name, `weight-inspect` never loads or interprets weight values — it only inspects structure.
 

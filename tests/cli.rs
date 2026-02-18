@@ -1,33 +1,22 @@
 //! Integration tests for CLI commands
 //! Run with: cargo test --test cli
 
-use std::fs;
 use std::process::Command;
 use tempfile::NamedTempFile;
 
-/// Get the path to the built binary
-fn binary_path() -> String {
-    // Check if we're in the project root or tests dir
-    if std::path::Path::new("../target/release/weight-inspect").exists() {
-        "../target/release/weight-inspect".to_string()
-    } else if std::path::Path::new("../../target/release/weight-inspect").exists() {
-        "../../target/release/weight-inspect".to_string()
-    } else {
-        // Try to build first
-        let _ = Command::new("cargo")
-            .args(["build", "--release"])
-            .current_dir("../..")
-            .output();
-        "../../target/release/weight-inspect".to_string()
-    }
+/// Run the CLI with given arguments
+fn run_cli(args: &[&str]) -> std::process::Output {
+    Command::new("cargo")
+        .args(["run", "--"])
+        .args(args)
+        .current_dir("..")
+        .output()
+        .expect("Failed to run cargo")
 }
 
 #[test]
 fn test_cli_help() {
-    let output = Command::new(binary_path())
-        .arg("--help")
-        .output()
-        .expect("Failed to run CLI");
+    let output = run_cli(&["--help"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("weight-inspect"));
@@ -39,10 +28,7 @@ fn test_cli_help() {
 
 #[test]
 fn test_id_help() {
-    let output = Command::new(binary_path())
-        .args(["id", "--help"])
-        .output()
-        .expect("Failed to run CLI");
+    let output = run_cli(&["id", "--help"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("fingerprint"));
@@ -50,10 +36,7 @@ fn test_id_help() {
 
 #[test]
 fn test_inspect_help() {
-    let output = Command::new(binary_path())
-        .args(["inspect", "--help"])
-        .output()
-        .expect("Failed to run CLI");
+    let output = run_cli(&["inspect", "--help"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("structure"));
@@ -61,10 +44,7 @@ fn test_inspect_help() {
 
 #[test]
 fn test_diff_help() {
-    let output = Command::new(binary_path())
-        .args(["diff", "--help"])
-        .output()
-        .expect("Failed to run CLI");
+    let output = run_cli(&["diff", "--help"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("compare"));
@@ -72,10 +52,7 @@ fn test_diff_help() {
 
 #[test]
 fn test_summary_help() {
-    let output = Command::new(binary_path())
-        .args(["summary", "--help"])
-        .output()
-        .expect("Failed to run CLI");
+    let output = run_cli(&["summary", "--help"]);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("scripts") || stdout.contains("One-line"));
@@ -83,10 +60,7 @@ fn test_summary_help() {
 
 #[test]
 fn test_nonexistent_file() {
-    let output = Command::new(binary_path())
-        .args(["inspect", "/nonexistent/file.gguf"])
-        .output()
-        .expect("Failed to run CLI");
+    let output = run_cli(&["inspect", "/nonexistent/file.gguf"]);
 
     // Should fail with non-zero exit code
     assert!(!output.status.success());
@@ -94,18 +68,13 @@ fn test_nonexistent_file() {
 
 #[test]
 fn test_id_json_flag() {
-    // Create a minimal temp file that won't parse but tests --json flag
     let temp = NamedTempFile::new().expect("Failed to create temp file");
     let path = temp.path();
 
-    let output = Command::new(binary_path())
-        .args(["id", &path.to_string_lossy(), "--json"])
-        .output()
-        .expect("Failed to run CLI");
+    let output = run_cli(&["id", &path.to_string_lossy(), "--json"]);
 
-    // Should either parse or fail gracefully - just check --json is accepted
+    // Just check the flag is accepted (should parse or fail gracefully)
     let stderr = String::from_utf8_lossy(&output.stderr);
-    // Don't assert on success - we're testing the flag is accepted
     println!("stderr: {}", stderr);
 }
 
@@ -114,10 +83,7 @@ fn test_inspect_json_flag() {
     let temp = NamedTempFile::new().expect("Failed to create temp file");
     let path = temp.path();
 
-    let output = Command::new(binary_path())
-        .args(["inspect", &path.to_string_lossy(), "--json"])
-        .output()
-        .expect("Failed to run CLI");
+    let output = run_cli(&["inspect", &path.to_string_lossy(), "--json"]);
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     println!("stderr: {}", stderr);
