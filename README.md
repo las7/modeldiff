@@ -119,15 +119,6 @@ $ weight-inspect id model.gguf --json
 }
 ```
 
-### Quiet mode (for scripts)
-
-```bash
-# Exit 0 if identical, 1 if different
-$ weight-inspect diff a.gguf b.gguf --quiet
-$ echo $?
-1
-```
-
 ## What it does
 
 - Parses GGUF and safetensors headers

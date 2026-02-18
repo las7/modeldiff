@@ -26,8 +26,6 @@ enum Commands {
         file_b: String,
         #[arg(long)]
         json: bool,
-        #[arg(long)]
-        quiet: bool,
     },
     Id {
         file: String,
@@ -61,14 +59,7 @@ fn detect_format(path: &Path) -> Result<Artifact, String> {
     parse_safetensors(&mut reader).map_err(|e| e.to_string())
 }
 
-fn print_diff(result: &diff::DiffResult, json: bool, quiet: bool) {
-    if quiet {
-        if result.has_changes() {
-            std::process::exit(1);
-        }
-        return;
-    }
-
+fn print_diff(result: &diff::DiffResult, json: bool) {
     if json {
         println!("{}", serde_json::to_string_pretty(result).unwrap());
         return;
@@ -137,7 +128,6 @@ fn main() {
             file_a,
             file_b,
             json,
-            quiet,
         } => {
             let artifact_a = detect_format(Path::new(&file_a)).expect("failed to parse file a");
             let artifact_b = detect_format(Path::new(&file_b)).expect("failed to parse file b");
@@ -148,7 +138,7 @@ fn main() {
             let mut result = diff::diff(&artifact_a, &artifact_b);
             result.hash_equal = hash_a == hash_b;
 
-            print_diff(&result, json, quiet);
+            print_diff(&result, json);
         }
         Commands::Id { file, json } => {
             let artifact = detect_format(Path::new(&file)).expect("failed to parse file");
