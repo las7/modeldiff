@@ -1,4 +1,4 @@
-# modeldiff
+# weight-inspect
 
 Deterministic structural identity for GGUF and safetensors ML model files.
 
@@ -13,7 +13,7 @@ Model files are opaque blobs. When you download or convert a model, you can't ea
 
 ## The Solution
 
-modeldiff provides **structural identity** - a canonical, deterministic representation of what a model file actually contains.
+weight-inspect provides **structural identity** - a canonical, deterministic representation of what a model file actually contains.
 
 ### Core Value
 
@@ -30,7 +30,7 @@ modeldiff provides **structural identity** - a canonical, deterministic represen
 ## Installation
 
 ```bash
-cargo install modeldiff
+cargo install weight-inspect
 ```
 
 Or build from source:
@@ -43,25 +43,25 @@ cargo build --release
 
 ```bash
 # Inspect a model file
-modeldiff inspect model.gguf
+weight-inspect inspect model.gguf
 
 # Inspect with JSON output
-modeldiff inspect model.gguf --json
+weight-inspect inspect model.gguf --json
 
 # Get structural identity
-modeldiff id model.gguf
+weight-inspect id model.gguf
 
 # ID with JSON output
-modeldiff id model.gguf --json
+weight-inspect id model.gguf --json
 
 # Diff two files
-modeldiff diff a.gguf b.gguf
+weight-inspect diff a.gguf b.gguf
 
 # JSON output (for tooling/integration)
-modeldiff diff a.gguf b.gguf --json
+weight-inspect diff a.gguf b.gguf --json
 
 # Quiet mode (exit 0 if identical, 1 if different)
-modeldiff diff a.gguf b.gguf --quiet
+weight-inspect diff a.gguf b.gguf --quiet
 ```
 
 ## What it does

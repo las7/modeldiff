@@ -4,14 +4,14 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
 
-use modeldiff::diff;
-use modeldiff::gguf::parse_gguf;
-use modeldiff::hash::compute_structural_hash;
-use modeldiff::safetensors::parse_safetensors;
-use modeldiff::types::Artifact;
+use weight_inspect::diff;
+use weight_inspect::gguf::parse_gguf;
+use weight_inspect::hash::compute_structural_hash;
+use weight_inspect::safetensors::parse_safetensors;
+use weight_inspect::types::Artifact;
 
 #[derive(Parser)]
-#[command(name = "modeldiff")]
+#[command(name = "weight-inspect")]
 #[command(version = "0.1.0")]
 #[command(about = "Structural identity for GGUF and safetensors model files", long_about = None)]
 struct Cli {
