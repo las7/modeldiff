@@ -9,6 +9,8 @@ use weight_inspect::diff;
 use weight_inspect::gguf::parse_gguf;
 use weight_inspect::gguf::GGUFParserError;
 use weight_inspect::hash::compute_structural_hash;
+use weight_inspect::onnx::parse_onnx;
+use weight_inspect::onnx::OnnxParserError;
 use weight_inspect::safetensors::parse_safetensors;
 use weight_inspect::safetensors::SafetensorsParserError;
 use weight_inspect::types::Artifact;
@@ -34,6 +36,11 @@ pub enum AppError {
     SafetensorsParse {
         path: String,
         source: SafetensorsParserError,
+    },
+    #[error("failed to parse ONNX file '{path}': {source}")]
+    OnnxParse {
+        path: String,
+        source: OnnxParserError,
     },
     #[error("JSON error: {0}")]
     Json(serde_json::Error),
@@ -81,6 +88,20 @@ enum Commands {
 }
 
 fn detect_format(path: &Path) -> Result<Artifact, AppError> {
+    let path_str = path.to_string_lossy().to_lowercase();
+
+    if path_str.ends_with(".onnx") {
+        let file = File::open(path).map_err(|e| AppError::FileOpen {
+            path: path.display().to_string(),
+            source: e,
+        })?;
+        let mut reader = BufReader::new(file);
+        return parse_onnx(&mut reader).map_err(|e| AppError::OnnxParse {
+            path: path.display().to_string(),
+            source: e,
+        });
+    }
+
     let mut file = File::open(path).map_err(|e| AppError::FileOpen {
         path: path.display().to_string(),
         source: e,

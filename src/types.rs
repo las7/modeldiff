@@ -16,6 +16,7 @@ pub struct Artifact {
 pub enum Format {
     GGUF,
     Safetensors,
+    Onnx,
 }
 
 #[derive(Debug, Clone)]
@@ -134,16 +135,16 @@ impl<'de> Deserialize<'de> for CanonicalValue {
             return Ok(CanonicalValue::Int(i));
         }
 
-        if let Some(bits) = s.strip_prefix("f32:")
-            && let Ok(bits) = bits.parse::<u32>()
-        {
-            return Ok(CanonicalValue::Float32(f32::from_bits(bits).into()));
+        if let Some(bits_str) = s.strip_prefix("f32:") {
+            if let Ok(bits) = bits_str.parse::<u32>() {
+                return Ok(CanonicalValue::Float32(f32::from_bits(bits).into()));
+            }
         }
 
-        if (s.contains('.') || s.to_lowercase().contains('e'))
-            && let Ok(fl) = s.parse::<f64>()
-        {
-            return Ok(CanonicalValue::Float(fl));
+        if s.contains('.') || s.to_lowercase().contains('e') {
+            if let Ok(fl) = s.parse::<f64>() {
+                return Ok(CanonicalValue::Float(fl));
+            }
         }
 
         if let Ok(bits) = s.parse::<u64>() {
