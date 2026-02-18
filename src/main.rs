@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use serde::Serialize;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::Path;
@@ -30,9 +31,13 @@ enum Commands {
     },
     Id {
         file: String,
+        #[arg(long)]
+        json: bool,
     },
     Inspect {
         file: String,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -142,40 +147,80 @@ fn main() {
 
             print_diff(&result, json, quiet);
         }
-        Commands::Id { file } => {
+        Commands::Id { file, json } => {
             let artifact = detect_format(Path::new(&file)).expect("failed to parse file");
             let hash = compute_structural_hash(&artifact);
 
-            println!("format: {:?}", artifact.format);
-            println!("structural_hash: {}", hash);
-            println!("tensor_count: {}", artifact.tensors.len());
-            println!("metadata_count: {}", artifact.metadata.len());
-        }
-        Commands::Inspect { file } => {
-            let artifact = detect_format(Path::new(&file)).expect("failed to parse file");
-            let hash = compute_structural_hash(&artifact);
-
-            println!("format: {:?}", artifact.format);
-            if let Some(version) = artifact.gguf_version {
-                println!("gguf_version: {}", version);
-            }
-            println!("tensor_count: {}", artifact.tensors.len());
-            println!("metadata_count: {}", artifact.metadata.len());
-            println!("structural_hash: {}", hash);
-
-            if !artifact.tensors.is_empty() {
-                println!("\nFirst 5 tensors:");
-                for (i, (name, tensor)) in artifact.tensors.iter().take(5).enumerate() {
-                    println!(
-                        "  {}: {} {:?} ({})",
-                        i + 1,
-                        name,
-                        tensor.shape,
-                        tensor.dtype
-                    );
+            if json {
+                #[derive(Serialize)]
+                struct IdOutput {
+                    schema: u32,
+                    format: String,
+                    structural_hash: String,
+                    tensor_count: usize,
+                    metadata_count: usize,
                 }
-                if artifact.tensors.len() > 5 {
-                    println!("  ... and {} more", artifact.tensors.len() - 5);
+                let output = IdOutput {
+                    schema: 1,
+                    format: format!("{:?}", artifact.format).to_lowercase(),
+                    structural_hash: hash,
+                    tensor_count: artifact.tensors.len(),
+                    metadata_count: artifact.metadata.len(),
+                };
+                println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            } else {
+                println!("format: {:?}", artifact.format);
+                println!("structural_hash: {}", hash);
+                println!("tensor_count: {}", artifact.tensors.len());
+                println!("metadata_count: {}", artifact.metadata.len());
+            }
+        }
+        Commands::Inspect { file, json } => {
+            let artifact = detect_format(Path::new(&file)).expect("failed to parse file");
+            let hash = compute_structural_hash(&artifact);
+
+            if json {
+                #[derive(Serialize)]
+                struct InspectOutput {
+                    schema: u32,
+                    format: String,
+                    gguf_version: Option<i64>,
+                    tensor_count: usize,
+                    metadata_count: usize,
+                    structural_hash: String,
+                }
+                let output = InspectOutput {
+                    schema: 1,
+                    format: format!("{:?}", artifact.format).to_lowercase(),
+                    gguf_version: artifact.gguf_version,
+                    tensor_count: artifact.tensors.len(),
+                    metadata_count: artifact.metadata.len(),
+                    structural_hash: hash,
+                };
+                println!("{}", serde_json::to_string_pretty(&output).unwrap());
+            } else {
+                println!("format: {:?}", artifact.format);
+                if let Some(version) = artifact.gguf_version {
+                    println!("gguf_version: {}", version);
+                }
+                println!("tensor_count: {}", artifact.tensors.len());
+                println!("metadata_count: {}", artifact.metadata.len());
+                println!("structural_hash: {}", hash);
+
+                if !artifact.tensors.is_empty() {
+                    println!("\nFirst 5 tensors:");
+                    for (i, (name, tensor)) in artifact.tensors.iter().take(5).enumerate() {
+                        println!(
+                            "  {}: {} {:?} ({})",
+                            i + 1,
+                            name,
+                            tensor.shape,
+                            tensor.dtype
+                        );
+                    }
+                    if artifact.tensors.len() > 5 {
+                        println!("  ... and {} more", artifact.tensors.len() - 5);
+                    }
                 }
             }
         }
