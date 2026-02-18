@@ -4,11 +4,11 @@ use std::collections::BTreeMap;
 use std::io::{Read, Seek};
 use thiserror::Error;
 
-mod onnx {
+mod onnx_proto {
     include!(concat!(env!("OUT_DIR"), "/onnx-proto/onnx.rs"));
 }
 
-use onnx::ModelProto;
+use onnx_proto::ModelProto;
 
 #[derive(Error, Debug)]
 pub enum OnnxParserError {

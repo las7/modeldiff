@@ -1,13 +1,12 @@
 use crate::types::Artifact;
 use sha2::{Digest, Sha256};
 
-pub fn compute_structural_hash(artifact: &Artifact) -> String {
-    let canonical =
-        serde_json::to_string(artifact).expect("failed to serialize artifact - this is a bug");
+pub fn compute_structural_hash(artifact: &Artifact) -> Result<String, serde_json::Error> {
+    let canonical = serde_json::to_string(artifact)?;
     let mut hasher = Sha256::new();
     hasher.update(canonical.as_bytes());
     let result = hasher.finalize();
-    hex::encode(result)
+    Ok(hex::encode(result))
 }
 
 #[cfg(test)]
@@ -29,7 +28,7 @@ mod tests {
             crate::types::CanonicalValue::String("value".to_string()),
         );
 
-        let hash1 = compute_structural_hash(&artifact1);
+        let hash1 = compute_structural_hash(&artifact1).unwrap();
 
         let mut artifact2 = Artifact {
             format: Format::GGUF,
@@ -42,7 +41,7 @@ mod tests {
             crate::types::CanonicalValue::String("value".to_string()),
         );
 
-        let hash2 = compute_structural_hash(&artifact2);
+        let hash2 = compute_structural_hash(&artifact2).unwrap();
 
         assert_eq!(hash1, hash2, "same artifact should produce same hash");
     }
@@ -71,8 +70,8 @@ mod tests {
             crate::types::CanonicalValue::String("value2".to_string()),
         );
 
-        let hash1 = compute_structural_hash(&artifact1);
-        let hash2 = compute_structural_hash(&artifact2);
+        let hash1 = compute_structural_hash(&artifact1).unwrap();
+        let hash2 = compute_structural_hash(&artifact2).unwrap();
 
         assert_ne!(
             hash1, hash2,
@@ -96,8 +95,8 @@ mod tests {
             tensors: BTreeMap::new(),
         };
 
-        let hash1 = compute_structural_hash(&artifact1);
-        let hash2 = compute_structural_hash(&artifact2);
+        let hash1 = compute_structural_hash(&artifact1).unwrap();
+        let hash2 = compute_structural_hash(&artifact2).unwrap();
 
         assert_ne!(
             hash1, hash2,
@@ -148,8 +147,8 @@ mod tests {
             },
         );
 
-        let hash1 = compute_structural_hash(&artifact1);
-        let hash2 = compute_structural_hash(&artifact2);
+        let hash1 = compute_structural_hash(&artifact1).unwrap();
+        let hash2 = compute_structural_hash(&artifact2).unwrap();
 
         assert_ne!(
             hash1, hash2,

@@ -331,8 +331,8 @@ mod tests {
             CanonicalValue::String("zzz".to_string()),
         );
 
-        let hash_a = compute_structural_hash(&a);
-        let hash_b = compute_structural_hash(&b);
+        let hash_a = compute_structural_hash(&a).unwrap();
+        let hash_b = compute_structural_hash(&b).unwrap();
 
         assert_eq!(hash_a, hash_b, "Metadata order should not affect hash");
     }
@@ -382,8 +382,8 @@ mod tests {
             },
         );
 
-        let hash_a = compute_structural_hash(&a);
-        let hash_b = compute_structural_hash(&b);
+        let hash_a = compute_structural_hash(&a).unwrap();
+        let hash_b = compute_structural_hash(&b).unwrap();
 
         assert_eq!(hash_a, hash_b, "Tensor order should not affect hash");
     }

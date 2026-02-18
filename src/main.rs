@@ -46,12 +46,9 @@ pub enum AppError {
     Json(serde_json::Error),
 }
 
-impl From<std::io::Error> for AppError {
-    fn from(err: std::io::Error) -> Self {
-        AppError::FileRead {
-            path: "unknown".to_string(),
-            source: err,
-        }
+impl From<serde_json::Error> for AppError {
+    fn from(err: serde_json::Error) -> Self {
+        AppError::Json(err)
     }
 }
 
@@ -88,9 +85,7 @@ enum Commands {
 }
 
 fn detect_format(path: &Path) -> Result<Artifact, AppError> {
-    let path_str = path.to_string_lossy().to_lowercase();
-
-    if path_str.ends_with(".onnx") {
+    if path.extension().map_or(false, |e| e == "onnx") {
         let file = File::open(path).map_err(|e| AppError::FileOpen {
             path: path.display().to_string(),
             source: e,
@@ -217,8 +212,8 @@ fn main() -> Result<(), AppError> {
             let artifact_a = detect_format(Path::new(&file_a))?;
             let artifact_b = detect_format(Path::new(&file_b))?;
 
-            let hash_a = compute_structural_hash(&artifact_a);
-            let hash_b = compute_structural_hash(&artifact_b);
+            let hash_a = compute_structural_hash(&artifact_a)?;
+            let hash_b = compute_structural_hash(&artifact_b)?;
 
             let mut result = diff::diff(&artifact_a, &artifact_b);
             result.hash_equal = hash_a == hash_b;
@@ -227,7 +222,7 @@ fn main() -> Result<(), AppError> {
         }
         Commands::Id { file, json } => {
             let artifact = detect_format(Path::new(&file))?;
-            let hash = compute_structural_hash(&artifact);
+            let hash = compute_structural_hash(&artifact)?;
 
             if json {
                 #[derive(Serialize)]
@@ -258,7 +253,7 @@ fn main() -> Result<(), AppError> {
         }
         Commands::Inspect { file, json } => {
             let artifact = detect_format(Path::new(&file))?;
-            let hash = compute_structural_hash(&artifact);
+            let hash = compute_structural_hash(&artifact)?;
 
             if json {
                 #[derive(Serialize)]
@@ -310,7 +305,7 @@ fn main() -> Result<(), AppError> {
         }
         Commands::Summary { file } => {
             let artifact = detect_format(Path::new(&file))?;
-            let hash = compute_structural_hash(&artifact);
+            let hash = compute_structural_hash(&artifact)?;
 
             let version_str = artifact
                 .gguf_version
