@@ -147,12 +147,11 @@ impl<'de> Deserialize<'de> for CanonicalValue {
             }
         }
 
-        if let Ok(bits) = s.parse::<u64>() {
-            let fl = f64::from_bits(bits);
-            return Ok(CanonicalValue::Float(fl));
+        if let Ok(i) = s.parse::<i64>() {
+            return Ok(CanonicalValue::Int(i));
         }
 
-        if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\\') && s.contains(':')) {
+        if s.starts_with('"') && s.ends_with('"') {
             return Ok(CanonicalValue::String(s));
         }
 
