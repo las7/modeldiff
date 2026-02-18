@@ -23,17 +23,10 @@ This lets you:
 ## Quick Start
 
 ```bash
-# Get a fingerprint (the core operation)
-weight-inspect id model.gguf
-
-# Inspect full details
-weight-inspect inspect model.gguf
-
-# Compare two models
-weight-inspect diff a.gguf b.gguf
-
-# One-line summary (for GitHub issues)
-weight-inspect summary model.gguf
+weight-inspect id model.gguf        # Get a stable fingerprint
+weight-inspect inspect model.gguf   # See full structure details
+weight-inspect diff a.gguf b.gguf   # Compare two models
+weight-inspect summary model.gguf   # One-line summary for scripts
 ```
 
 ## Installation
@@ -54,56 +47,94 @@ cargo build --release
 
 ```bash
 $ weight-inspect id model.gguf
+Structural identity
+──────────────────
+ID:        wi:gguf:v3:9c1f3d2a
+Stable:    yes (machine independent)
+Includes:  header, tensor names, shapes, dtypes
+Excludes:  raw weight bytes
+
 format: GGUF
-structural_hash: 2de46f849506b6a34b02d75796396ab6e1b9e24844a732de2a498463aa98376d
-tensor_count: 0
-metadata_count: 22
+structural_hash: 9c1f3d2a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1
+tensor_count: 291
+metadata_count: 12
 ```
 
-### One-line summary (for GitHub issues)
+### One-line summary (for scripting/CI)
 
 ```bash
 $ weight-inspect summary model.gguf
-gguf,3,0,22,2de46f849506b6a34b02d75796396ab6e1b9e24844a732de2a498463aa98376d
+gguf,3,291,12,9c1f3d2a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1
 ```
+
+`summary` is designed to fit on a single line and be safe for scripting, CI pipelines, and automation.
 
 ### Inspect full details
 
 ```bash
-$ weight-inspect inspect model.gguf
-format: GGUF
-gguf_version: 3
-tensor_count: 242
-metadata_count: 22
-structural_hash: a0c216cce9dec82633dc61eb21c96b8e66609be26aee149caea9f2eb885409e0
+$ weight-inspect inspect model.gguf --verbose
+gguf
+───
+Version:  3
+Tensors:  291
+Metadata: 12
 
-First 5 tensors:
-  1: blk.0.attn_norm.weight [768] (f32)
-  2: blk.0.ssm_a [16, 1536] (f32)
-  3: blk.0.ssm_conv1d.bias [1536] (f32)
-  4: blk.0.ssm_conv1d.weight [4, 1536] (f32)
-  5: blk.0.ssm_d [1536] (f32)
-  ... and 237 more
+Structural summary
+──────────────────
+Dtypes:  f16 (92%), q4_k (8%)
+
+Structural ID
+─────────────
+Hash: 9c1f3d2a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1
+
+Tensors (first 10)
+──────────────────
+Name                                    Dtype     Shape               Bytes
+────────────────────────────────────────────────────────────────────────────────
+token_embd.weight                      f32       [32000, 4096]      524288000
+blk.0.attn.wq.weight                  f16       [4096, 4096]       33554432
+blk.0.attn.wk.weight                  f16       [4096, 4096]       33554432
+blk.0.attn.wv.weight                  f16       [4096, 4096]       33554432
+blk.0.attn.wo.weight                  f16       [4096, 4096]       33554432
+blk.0.mlp.gate_proj.weight            f16       [11008, 4096]      90596966
+...
 ```
 
 ### Compare two files
 
 ```bash
 $ weight-inspect diff a.gguf b.gguf
-Structural Identity:
-  format equal: true
-  hash equal: false
-  tensor count equal: true
-  metadata count equal: false
+DIFFERENT
+--------------------
+Added tensors:    2
+Removed tensors:  0
+Modified tensors: 3
+Structural ID:    changed
 
-Metadata:
-  + gpt2.attention.head_count
-  - llama.attention.head_count
-  ~ general.architecture: llama -> gpt2
+Tensor changes
+─────────────
+  blk.12.attn.wq.weight
+    dtype: f16 -> q4_k
+    shape: [4096, 4096] -> [4096, 5120]
+  blk.18.mlp.up_proj
+    dtype: f16 -> q4_k
+  output.weight
+    shape: [32000, 4096] -> [32000, 5120]
+```
 
-Tensors:
-  ~ blk.0.attn_q.weight:
-      dtype: f16 -> q4_k
+Or for PR comments:
+
+```bash
+$ weight-inspect diff a.gguf b.gguf --format md
+## Structural Diff
+
+**Status:** ❌ DIFFERENT
+
+| Change Type | Count |
+|-------------|-------|
+| Added tensors | 2 |
+| Removed tensors | 0 |
+| Modified tensors | 3 |
 ```
 
 ### JSON output (for tooling)
@@ -162,6 +193,20 @@ See [SPEC.md](SPEC.md) for full specification.
 - Verify model file integrity
 - Compare quantization variants
 - Detect structural changes in converted models
+
+## Roadmap
+
+- [ ] Support for more formats (PyTorch .pt, TensorFlow .pb)
+- [ ] Configurable hash inputs (include/exclude metadata)
+- [ ] Output format plugins
+- [ ] Git-like status porcelain
+
+## Stability Guarantees
+
+- **Output ordering**: Alphabetically sorted (BTreeMap)
+- **Hash versioning**: Schema field in JSON output for future compatibility
+- **Breaking changes**: Will bump major version in CLI and JSON schema
+- **CI-safe**: Use `--fail-on-diff` for exit codes
 
 ## License
 
