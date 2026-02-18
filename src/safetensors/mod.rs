@@ -7,11 +7,17 @@ use thiserror::Error;
 pub enum SafetensorsParserError {
     #[error("invalid safetensors JSON header")]
     InvalidHeader,
+    #[error("header size exceeds maximum allowed ({max} bytes): {size} bytes")]
+    HeaderTooLarge { size: usize, max: usize },
+    #[error("invalid tensor length for '{name}': offset {offset} > {end}")]
+    InvalidByteLength { name: String, offset: u64, end: u64 },
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("JSON error: {0}")]
     JsonError(#[from] serde_json::Error),
 }
+
+const MAX_HEADER_SIZE: usize = 100 * 1024 * 1024; // 100MB
 
 pub fn parse_safetensors<R: Read + Seek>(
     reader: &mut R,
@@ -55,7 +61,16 @@ pub fn parse_safetensors<R: Read + Seek>(
                         [a, b]
                     })
                     .unwrap_or([0, 0]);
-                let byte_length = data_offsets[1] - data_offsets[0];
+                let offset = data_offsets[0];
+                let end = data_offsets[1];
+                if end <= offset {
+                    return Err(SafetensorsParserError::InvalidByteLength {
+                        name: key.clone(),
+                        offset,
+                        end,
+                    });
+                }
+                let byte_length = end - offset;
 
                 tensors.insert(
                     key.clone(),
@@ -81,6 +96,12 @@ pub fn parse_safetensors<R: Read + Seek>(
 fn read_header_size<R: Read + Seek>(reader: &mut R) -> Result<usize, SafetensorsParserError> {
     let mut buf = [0u8; 8];
     reader.read_exact(&mut buf)?;
-    let size = u64::from_le_bytes(buf);
-    Ok(size as usize)
+    let size = u64::from_le_bytes(buf) as usize;
+    if size > MAX_HEADER_SIZE {
+        return Err(SafetensorsParserError::HeaderTooLarge {
+            size,
+            max: MAX_HEADER_SIZE,
+        });
+    }
+    Ok(size)
 }

@@ -18,7 +18,7 @@ pub enum Format {
     Safetensors,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum CanonicalValue {
     Null,
     Bool(bool),
@@ -35,6 +35,29 @@ pub enum CanonicalValue {
     Uint64(i64),
     Int64(i64),
     Float32(f64),
+}
+
+impl PartialEq for CanonicalValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (CanonicalValue::Null, CanonicalValue::Null) => true,
+            (CanonicalValue::Bool(a), CanonicalValue::Bool(b)) => a == b,
+            (CanonicalValue::Int(a), CanonicalValue::Int(b)) => a == b,
+            (CanonicalValue::Float(a), CanonicalValue::Float(b)) => a.to_bits() == b.to_bits(),
+            (CanonicalValue::String(a), CanonicalValue::String(b)) => a == b,
+            (CanonicalValue::Array(a), CanonicalValue::Array(b)) => a == b,
+            (CanonicalValue::Uint8(a), CanonicalValue::Uint8(b)) => a == b,
+            (CanonicalValue::Int8(a), CanonicalValue::Int8(b)) => a == b,
+            (CanonicalValue::Uint16(a), CanonicalValue::Uint16(b)) => a == b,
+            (CanonicalValue::Int16(a), CanonicalValue::Int16(b)) => a == b,
+            (CanonicalValue::Uint32(a), CanonicalValue::Uint32(b)) => a == b,
+            (CanonicalValue::Int32(a), CanonicalValue::Int32(b)) => a == b,
+            (CanonicalValue::Uint64(a), CanonicalValue::Uint64(b)) => a == b,
+            (CanonicalValue::Int64(a), CanonicalValue::Int64(b)) => a == b,
+            (CanonicalValue::Float32(a), CanonicalValue::Float32(b)) => a.to_bits() == b.to_bits(),
+            _ => false,
+        }
+    }
 }
 
 pub struct CanonicalSerializer;
@@ -117,6 +140,12 @@ impl<'de> Deserialize<'de> for CanonicalValue {
             return Ok(CanonicalValue::Float32(f32::from_bits(bits).into()));
         }
 
+        if (s.contains('.') || s.to_lowercase().contains('e'))
+            && let Ok(fl) = s.parse::<f64>()
+        {
+            return Ok(CanonicalValue::Float(fl));
+        }
+
         if let Ok(bits) = s.parse::<u64>() {
             let fl = f64::from_bits(bits);
             return Ok(CanonicalValue::Float(fl));
@@ -158,4 +187,43 @@ pub struct Tensor {
     pub dtype: String,
     pub shape: Vec<u64>,
     pub byte_length: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_nan_equality() {
+        let nan = CanonicalValue::Float(f64::NAN);
+        assert_eq!(nan, nan, "NaN should equal NaN (by bit comparison)");
+    }
+
+    #[test]
+    fn test_float_equality() {
+        let a = CanonicalValue::Float(1.5);
+        let b = CanonicalValue::Float(1.5);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_float32_equality() {
+        let a = CanonicalValue::Float32(1.5);
+        let b = CanonicalValue::Float32(1.5);
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn test_string_serialization() {
+        let value = CanonicalValue::String("test".to_string());
+        let serialized = serde_json::to_string(&value).unwrap();
+        assert_eq!(serialized, "\"\\\"test\\\"\"");
+    }
+
+    #[test]
+    fn test_bool_serialization() {
+        let value = CanonicalValue::Bool(true);
+        let serialized = serde_json::to_string(&value).unwrap();
+        assert_eq!(serialized, "\"true\"");
+    }
 }

@@ -1,14 +1,52 @@
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
+use thiserror::Error;
 
 use weight_inspect::diff;
 use weight_inspect::gguf::parse_gguf;
+use weight_inspect::gguf::GGUFParserError;
 use weight_inspect::hash::compute_structural_hash;
 use weight_inspect::safetensors::parse_safetensors;
+use weight_inspect::safetensors::SafetensorsParserError;
 use weight_inspect::types::Artifact;
+
+#[derive(Error, Debug)]
+pub enum AppError {
+    #[error("failed to open file '{path}': {source}")]
+    FileOpen {
+        path: String,
+        source: std::io::Error,
+    },
+    #[error("failed to read file '{path}': {source}")]
+    FileRead {
+        path: String,
+        source: std::io::Error,
+    },
+    #[error("failed to parse GGUF file '{path}': {source}")]
+    GGUFParse {
+        path: String,
+        source: GGUFParserError,
+    },
+    #[error("failed to parse safetensors file '{path}': {source}")]
+    SafetensorsParse {
+        path: String,
+        source: SafetensorsParserError,
+    },
+    #[error("JSON error: {0}")]
+    Json(serde_json::Error),
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(err: std::io::Error) -> Self {
+        AppError::FileRead {
+            path: "unknown".to_string(),
+            source: err,
+        }
+    }
+}
 
 #[derive(Parser)]
 #[command(name = "weight-inspect")]
@@ -42,27 +80,52 @@ enum Commands {
     },
 }
 
-fn detect_format(path: &Path) -> Result<Artifact, String> {
-    let file = File::open(path).map_err(|e| e.to_string())?;
-    let mut reader = BufReader::new(file);
+fn detect_format(path: &Path) -> Result<Artifact, AppError> {
+    let mut file = File::open(path).map_err(|e| AppError::FileOpen {
+        path: path.display().to_string(),
+        source: e,
+    })?;
+    let mut reader = BufReader::new(&file);
     let mut magic = [0u8; 4];
-    reader.read_exact(&mut magic).map_err(|e| e.to_string())?;
+    reader
+        .read_exact(&mut magic)
+        .map_err(|e| AppError::FileRead {
+            path: path.display().to_string(),
+            source: e,
+        })?;
 
     if &magic == b"GGUF" {
-        let file = File::open(path).map_err(|e| e.to_string())?;
+        file.seek(SeekFrom::Start(0))
+            .map_err(|e| AppError::FileRead {
+                path: path.display().to_string(),
+                source: e,
+            })?;
         let mut reader = BufReader::new(file);
-        return parse_gguf(&mut reader).map_err(|e| e.to_string());
+        return parse_gguf(&mut reader).map_err(|e| AppError::GGUFParse {
+            path: path.display().to_string(),
+            source: e,
+        });
     }
 
-    let file = File::open(path).map_err(|e| e.to_string())?;
+    file.seek(SeekFrom::Start(0))
+        .map_err(|e| AppError::FileRead {
+            path: path.display().to_string(),
+            source: e,
+        })?;
     let mut reader = BufReader::new(file);
-    parse_safetensors(&mut reader).map_err(|e| e.to_string())
+    parse_safetensors(&mut reader).map_err(|e| AppError::SafetensorsParse {
+        path: path.display().to_string(),
+        source: e,
+    })
 }
 
-fn print_diff(result: &diff::DiffResult, json: bool) {
+fn print_diff(result: &diff::DiffResult, json: bool) -> Result<(), AppError> {
     if json {
-        println!("{}", serde_json::to_string_pretty(result).unwrap());
-        return;
+        println!(
+            "{}",
+            serde_json::to_string_pretty(result).map_err(AppError::Json)?
+        );
+        return Ok(());
     }
 
     println!("Structural Identity:");
@@ -118,9 +181,10 @@ fn print_diff(result: &diff::DiffResult, json: bool) {
     if !result.has_changes() {
         println!("\nNo differences found.");
     }
+    Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), AppError> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -129,8 +193,8 @@ fn main() {
             file_b,
             json,
         } => {
-            let artifact_a = detect_format(Path::new(&file_a)).expect("failed to parse file a");
-            let artifact_b = detect_format(Path::new(&file_b)).expect("failed to parse file b");
+            let artifact_a = detect_format(Path::new(&file_a))?;
+            let artifact_b = detect_format(Path::new(&file_b))?;
 
             let hash_a = compute_structural_hash(&artifact_a);
             let hash_b = compute_structural_hash(&artifact_b);
@@ -138,10 +202,10 @@ fn main() {
             let mut result = diff::diff(&artifact_a, &artifact_b);
             result.hash_equal = hash_a == hash_b;
 
-            print_diff(&result, json);
+            print_diff(&result, json)?;
         }
         Commands::Id { file, json } => {
-            let artifact = detect_format(Path::new(&file)).expect("failed to parse file");
+            let artifact = detect_format(Path::new(&file))?;
             let hash = compute_structural_hash(&artifact);
 
             if json {
@@ -160,7 +224,10 @@ fn main() {
                     tensor_count: artifact.tensors.len(),
                     metadata_count: artifact.metadata.len(),
                 };
-                println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output).map_err(AppError::Json)?
+                );
             } else {
                 println!("format: {:?}", artifact.format);
                 println!("structural_hash: {}", hash);
@@ -169,7 +236,7 @@ fn main() {
             }
         }
         Commands::Inspect { file, json } => {
-            let artifact = detect_format(Path::new(&file)).expect("failed to parse file");
+            let artifact = detect_format(Path::new(&file))?;
             let hash = compute_structural_hash(&artifact);
 
             if json {
@@ -190,7 +257,10 @@ fn main() {
                     metadata_count: artifact.metadata.len(),
                     structural_hash: hash,
                 };
-                println!("{}", serde_json::to_string_pretty(&output).unwrap());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&output).map_err(AppError::Json)?
+                );
             } else {
                 println!("format: {:?}", artifact.format);
                 if let Some(version) = artifact.gguf_version {
@@ -218,7 +288,7 @@ fn main() {
             }
         }
         Commands::Summary { file } => {
-            let artifact = detect_format(Path::new(&file)).expect("failed to parse file");
+            let artifact = detect_format(Path::new(&file))?;
             let hash = compute_structural_hash(&artifact);
 
             let version_str = artifact
@@ -235,4 +305,5 @@ fn main() {
             );
         }
     }
+    Ok(())
 }

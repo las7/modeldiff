@@ -11,11 +11,22 @@ pub enum GGUFParserError {
     InvalidMagic,
     #[error("invalid GGUF version: {0}")]
     InvalidVersion(i32),
+    #[error("tensor count exceeds maximum ({max}): {count}")]
+    TensorCountTooLarge { count: u64, max: u64 },
+    #[error("metadata count exceeds maximum ({max}): {count}")]
+    MetadataCountTooLarge { count: u64, max: u64 },
+    #[error("tensor dimensions exceed maximum ({max}): {dims}")]
+    DimensionsTooLarge { dims: u32, max: u32 },
+    #[error("tensor shape too large (product overflow)")]
+    ShapeTooLarge,
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }
 
 const GGUF_MAGIC: u32 = 0x46554747;
+const MAX_TENSOR_COUNT: u64 = 100_000;
+const MAX_METADATA_COUNT: u64 = 10_000;
+const MAX_DIMENSIONS: u32 = 32;
 
 pub fn parse_gguf<R: Read + Seek>(reader: &mut R) -> Result<Artifact, GGUFParserError> {
     let magic = read_u32(reader)?;
@@ -29,7 +40,19 @@ pub fn parse_gguf<R: Read + Seek>(reader: &mut R) -> Result<Artifact, GGUFParser
     }
 
     let tensor_count = read_u64(reader)?;
+    if tensor_count > MAX_TENSOR_COUNT {
+        return Err(GGUFParserError::TensorCountTooLarge {
+            count: tensor_count,
+            max: MAX_TENSOR_COUNT,
+        });
+    }
     let metadata_kv_count = read_u64(reader)?;
+    if metadata_kv_count > MAX_METADATA_COUNT {
+        return Err(GGUFParserError::MetadataCountTooLarge {
+            count: metadata_kv_count,
+            max: MAX_METADATA_COUNT,
+        });
+    }
 
     let mut metadata = BTreeMap::new();
     for _ in 0..metadata_kv_count {
@@ -41,13 +64,20 @@ pub fn parse_gguf<R: Read + Seek>(reader: &mut R) -> Result<Artifact, GGUFParser
     for _ in 0..tensor_count {
         let name = read_string(reader)?;
         let n_dims = read_u32(reader)?;
+        if n_dims > MAX_DIMENSIONS {
+            return Err(GGUFParserError::DimensionsTooLarge {
+                dims: n_dims,
+                max: MAX_DIMENSIONS,
+            });
+        }
         let mut shape = Vec::new();
         for _ in 0..n_dims {
             shape.push(read_u64(reader)?);
         }
         let dtype = read_u32(reader)?;
         let _offset = read_u64(reader)?;
-        let byte_length = compute_byte_length(&shape, dtype);
+        let byte_length =
+            compute_byte_length(&shape, dtype).ok_or(GGUFParserError::ShapeTooLarge)?;
 
         tensors.insert(
             name.clone(),
@@ -229,15 +259,17 @@ fn gguf_dtype_str(dtype: u32) -> String {
     }
 }
 
-fn compute_byte_length(shape: &[u64], dtype: u32) -> u64 {
-    // For structural diff, we don't need exact byte lengths
-    // Just return a consistent value based on dtype category
-    let elements: u64 = shape.iter().product();
-    match dtype {
-        0 | 26 => elements * 4,      // 32-bit types
-        1 | 25 | 30 => elements * 2, // 16-bit types
-        24 => elements,              // 8-bit types
-        27 | 28 => elements * 8,     // 64-bit types
-        _ => 0,                      // Quantized types - skip byte length comparison
+fn compute_byte_length(shape: &[u64], dtype: u32) -> Option<u64> {
+    let mut elements: u64 = 1;
+    for &dim in shape {
+        elements = elements.checked_mul(dim)?;
     }
+    let byte_size = match dtype {
+        0 | 26 => elements.checked_mul(4)?,      // f32, i32
+        1 | 25 | 30 => elements.checked_mul(2)?, // f16, i16, bf16
+        24 => elements,                          // i8
+        27 | 28 => elements.checked_mul(8)?,     // i64, f64
+        _ => elements,                           // Quantized types - use element count
+    };
+    Some(byte_size)
 }

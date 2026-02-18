@@ -1,8 +1,8 @@
-# modeldiff Specification
+# weight-inspect Specification
 
 ## Overview
 
-`modeldiff` provides deterministic structural identity for GGUF and safetensors model files.
+`weight-inspect` provides deterministic structural identity for GGUF and safetensors model files.
 
 **Scope:**
 - Parse GGUF and safetensors headers/metadata
@@ -56,16 +56,15 @@ All maps MUST be sorted by key:
 
 **Integers:** Serialize as JSON integers (no trailing decimals).
 
-**Floats:** Serialize as strings containing bit pattern to ensure reproducibility:
-```json
-{"f64_bits": 4611686018427387904}
-```
+**Floats:** Serialize as raw bit patterns (as JSON numbers) to ensure reproducibility:
+- `Float`: bit pattern as u64 (e.g., `4611686018427387904`)
+- `Float32`: prefix with `f32:` then bit pattern as u32 (e.g., `f32:1077936128`)
 
 This prevents floating-point representation differences across platforms.
 
 ### 3. String Normalization
 
-All strings MUST be normalized to Unicode NFC (Canonical Decomposition, followed by Canonical Composition).
+Strings are escaped for JSON serialization. No Unicode normalization is performed.
 
 ### 4. Array Ordering
 
@@ -84,7 +83,7 @@ Given identical input files:
 
 ## Output Formats
 
-### CLI: `modeldiff inspect <file>`
+### CLI: `weight-inspect inspect <file>`
 
 ```
 format: gguf
@@ -98,7 +97,7 @@ First 5 tensors:
   ...
 ```
 
-### CLI: `modeldiff id <file>`
+### CLI: `weight-inspect id <file>`
 
 ```
 format: gguf
@@ -107,7 +106,7 @@ tensor_count: 242
 metadata_count: 22
 ```
 
-### CLI: `modeldiff diff <a> <b>`
+### CLI: `weight-inspect diff <a> <b>`
 
 ```
 Structural Identity:
