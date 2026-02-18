@@ -2,6 +2,8 @@
 
 Inspect GGUF and safetensors model files to see what's inside.
 
+Unlike hashing the full file or loading the model, `weight-inspect` compares **structure only** — making it fast, safe, and deterministic.
+
 ## The Problem
 
 Model files are opaque blobs. When you download or convert a model, you can't easily answer:
@@ -23,10 +25,10 @@ This lets you:
 ## Quick Start
 
 ```bash
-weight-inspect id model.gguf        # Get a stable fingerprint
-weight-inspect inspect model.gguf   # See full structure details
-weight-inspect diff a.gguf b.gguf   # Compare two models
-weight-inspect summary model.gguf   # One-line summary for scripts
+weight-inspect summary model.gguf   # Quick glance (for scripts)
+weight-inspect inspect model.gguf   # Full structure details
+weight-inspect id model.gguf       # Stable fingerprint
+weight-inspect diff a.gguf b.gguf  # Compare two models
 ```
 
 ## Installation
@@ -177,6 +179,9 @@ $ weight-inspect id model.gguf --json
 - Lists tensor names, dtypes, and shapes
 - Computes structural hash (deterministic JSON → SHA256)
 - Compares two files showing structural differences
+- Unknown or unsupported fields are surfaced explicitly and do not silently affect identity
+
+Structural hashes are versioned implicitly by format and canonicalization rules.
 
 ## What it does NOT do
 

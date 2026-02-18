@@ -68,6 +68,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Compare two model files and show structural differences
     Diff {
         file_a: String,
         file_b: String,
@@ -82,11 +83,13 @@ enum Commands {
         #[arg(long, default_value = "false")]
         verbose: bool,
     },
+    /// Show stable structural fingerprint
     Id {
         file: String,
         #[arg(long, default_value = "false")]
         json: bool,
     },
+    /// Show full model structure details
     Inspect {
         file: String,
         #[arg(long, default_value = "false")]
@@ -94,9 +97,8 @@ enum Commands {
         #[arg(long, default_value = "false")]
         verbose: bool,
     },
-    Summary {
-        file: String,
-    },
+    /// One-line summary for scripts and CI
+    Summary { file: String },
 }
 
 fn detect_format(path: &Path) -> Result<Artifact, AppError> {
