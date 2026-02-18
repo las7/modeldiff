@@ -159,6 +159,12 @@ weight-inspect inspect model.gguf --verbose
 weight-inspect diff a.gguf b.gguf --verbose
 ```
 
+### HTML output (for visualization)
+
+```bash
+weight-inspect inspect model.gguf --html > inspection.html
+```
+
 ### JSON output (for tooling)
 
 ```bash
@@ -207,8 +213,15 @@ If you need content equality (byte-for-byte), that's a separate mode that would 
 2. **Canonical**: Floats serialized as bit patterns, maps sorted
 3. **No heuristics**: Pure structural comparison
 4. **Fail fast**: Invalid files produce clear errors
+5. **Stable output**: The same input file will always produce identical output across runs and machines
 
 See [SPEC.md](SPEC.md) for full specification.
+
+## Diff Output
+
+Diffs are grouped by *type of structural change* rather than interpreted for semantic impact.
+
+Use `--format md` for markdown output suitable for PR comments.
 
 ## Use cases
 

@@ -95,6 +95,8 @@ enum Commands {
         #[arg(long, default_value = "false")]
         json: bool,
         #[arg(long, default_value = "false")]
+        html: bool,
+        #[arg(long, default_value = "false")]
         verbose: bool,
     },
     /// One-line summary for scripts and CI
@@ -300,6 +302,7 @@ fn main() -> Result<(), AppError> {
         Commands::Inspect {
             file,
             json,
+            html,
             verbose,
         } => {
             let artifact = detect_format(Path::new(&file))?;
@@ -327,6 +330,8 @@ fn main() -> Result<(), AppError> {
                     "{}",
                     serde_json::to_string_pretty(&output).map_err(AppError::Json)?
                 );
+            } else if html {
+                print_inspect_html(&artifact, &hash);
             } else {
                 print_inspect(&artifact, &hash, verbose);
             }
@@ -413,6 +418,49 @@ fn print_inspect(artifact: &Artifact, hash: &str, verbose: bool) {
             );
         }
     }
+}
+
+fn print_inspect_html(artifact: &Artifact, hash: &str) {
+    println!("<!DOCTYPE html>");
+    println!("<html><head><title>Model Inspection</title>");
+    println!("<style>");
+    println!("body {{ font-family: system-ui, sans-serif; margin: 2rem; }}");
+    println!("table {{ border-collapse: collapse; width: 100%; }}");
+    println!("th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}");
+    println!("th {{ background: #f5f5f5; }}");
+    println!(".summary {{ background: #f9f9f9; padding: 1rem; margin-bottom: 1rem; }}");
+    println!("</style></head><body>");
+    println!("<h1>Model Inspection</h1>");
+    println!("<div class='summary'>");
+    println!("<p><strong>Format:</strong> {:?}</p>", artifact.format);
+    if let Some(v) = artifact.gguf_version {
+        println!("<p><strong>Version:</strong> {}</p>", v);
+    }
+    println!(
+        "<p><strong>Tensors:</strong> {}</p>",
+        artifact.tensors.len()
+    );
+    println!(
+        "<p><strong>Metadata:</strong> {}</p>",
+        artifact.metadata.len()
+    );
+    println!("<p><strong>Hash:</strong> {}</p>", hash);
+    println!("</div>");
+    println!("<h2>Tensors</h2>");
+    println!("<table><tr><th>Name</th><th>Dtype</th><th>Shape</th><th>Bytes</th></tr>");
+    for (name, tensor) in artifact.tensors.iter().take(100) {
+        println!(
+            "<tr><td>{}</td><td>{}</td><td>{:?}</td><td>{}</td></tr>",
+            name, tensor.dtype, tensor.shape, tensor.byte_length
+        );
+    }
+    if artifact.tensors.len() > 100 {
+        println!(
+            "<tr><td colspan='4'>... and {} more</td></tr>",
+            artifact.tensors.len() - 100
+        );
+    }
+    println!("</table></body></html>");
 }
 
 fn print_diff_extended(
