@@ -30,16 +30,18 @@ jobs:
           - runner: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             ext: ''
-          - runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            ext: '.exe'
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Get tag
         id: get_tag
         run: |
-          TAG="${{ github.event.inputs.tag }}"
-          if [ -z "$TAG" ]; then
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
             TAG="${GITHUB_REF#refs/tags/}"
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
