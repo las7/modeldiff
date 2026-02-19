@@ -12,8 +12,8 @@ on:
         type: string
 
 jobs:
-  build:
-    name: Build release
+  build-macos:
+    name: Build macOS
     runs-on: macos-latest
     permissions:
       contents: write
@@ -37,25 +37,51 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build macOS x86_64
-        run: cargo build --release --target x86_64-apple-darwin
-
-      - name: Build macOS ARM
-        run: cargo build --release --target aarch64-apple-darwin
-
-      - name: Build Linux x86_64
-        run: |
-          cargo build --release --target x86_64-unknown-linux-gnu
-          strip target/x86_64-unknown-linux-gnu/release/weight-inspect
+      - name: Build
+        run: cargo build --release
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_tag.outputs.tag }}
-          files: |
-            target/x86_64-apple-darwin/release/weight-inspect
-            target/aarch64-apple-darwin/release/weight-inspect
-            target/x86_64-unknown-linux-gnu/release/weight-inspect
+          files: target/release/weight-inspect
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Get tag
+        id: get_tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.get_tag.outputs.tag }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          files: target/x86_64-unknown-linux-gnu/release/weight-inspect
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
