@@ -49,6 +49,7 @@ jobs:
         with:
           tag_name: ${{ steps.get_tag.outputs.tag }}
           files: target/release/weight-inspect
+          asset_name: weight-inspect-macos
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -86,6 +87,6 @@ jobs:
         with:
           tag_name: ${{ steps.get_tag.outputs.tag }}
           files: target/x86_64-unknown-linux-gnu/release/weight-inspect
-          draft: true
+          asset_name: weight-inspect-linux
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
